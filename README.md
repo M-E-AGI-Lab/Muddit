@@ -1,4 +1,6 @@
-# 🌌 Muddit: A Unified Discrete Diffusion Model for Image & Text Generation
+# 🌌 Muddit: Liberating Generation Beyond Text-to-Image with a Unified Discrete Diffusion Model
+
+[![arXiv](https://img.shields.io/badge/arXiv-2505.23606-b31b1b.svg)](https://arxiv.org/abs/2505.23606)
 
 Welcome to the official repository of **Muddit** — a next-generation foundation model in the Meissonic family, built upon discrete diffusion for unified and efficient multimodal generation.
 
