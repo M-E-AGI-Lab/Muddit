@@ -2,6 +2,8 @@
 
 [![arXiv](https://img.shields.io/badge/arXiv-2505.23606-b31b1b.svg)](https://arxiv.org/abs/2505.23606)
 
+![Tracing the Evolution of Unified Generation Foundation Models](./Evolution.png)
+
 Welcome to the official repository of **Muddit** — a next-generation foundation model in the Meissonic family, built upon discrete diffusion for unified and efficient multimodal generation.
 
 Unlike traditional autoregressive methods, **Muddit** leverages discrete diffusion (a.k.a. MaskGIT-style masking) as its core mechanism — enabling fast, parallel decoding across modalities.
