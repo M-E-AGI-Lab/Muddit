@@ -4,6 +4,8 @@
 [![Hugging Face](https://img.shields.io/badge/🤗%20Huggingface-Model_Muddit-yellow)](https://huggingface.co/MeissonFlow/Muddit)
 [![Demo](https://img.shields.io/badge/Live-Demo_Muddit-blue?logo=huggingface)](https://huggingface.co/spaces/MeissonFlow/muddit)
 
+[Chinese Media Report](https://www.techwalker.com/2025/0603/3167162.shtml)
+
 
 ![Tracing the Evolution of Unified Generation Foundation Models](./Evolution.png)
 
