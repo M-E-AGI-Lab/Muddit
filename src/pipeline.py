@@ -40,10 +40,8 @@ def _prepare_latent_image_ids(batch_size, height, width, device, dtype):
     return latent_image_ids.to(device=device, dtype=dtype)
 
 def dedup_consecutive_words(text: str) -> str:
-    """
-    >>> dedup_consecutive_words("hello hello world world world")
-    'hello world'
-    """
+    # Weired problem
+    text = text.replace("is such is", "").replace("such is", "").replace("such as", "").replace("such", "")
     words = text.split()
     if not words:
         return text
@@ -55,23 +53,6 @@ def dedup_consecutive_words(text: str) -> str:
     return " ".join(out)
 
 def keep_upto_last_period(text: str) -> str:
-    """
-    Return the substring up to (and including) the last period-mark.
-    
-    The function searches first for the Chinese full stop “。”;
-    if none is found, it falls back to the ASCII dot “.”.
-    
-    Parameters
-    ----------
-    text : str
-        Input string.
-    
-    Returns
-    -------
-    str
-        Substring ending at the final period-mark.  If no period is present,
-        the original string is returned unchanged.
-    """
     # Try the Chinese full stop first
     idx = text.rfind("。")
     # Fallback to the ASCII period
