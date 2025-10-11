@@ -12,7 +12,7 @@ PYTHON_PATH='./' accelerate launch --multi_gpu --gpu_ids '0,1,2,3,4,5,6,7' --mai
         --instance_dataset 'ImageCaptionLargeDataset' \
         --instance_data_dir  '/path/to/data/' \
         --resolution 512 \
-        --mixed_precision fp16 \
+        --mixed_precision bf16 \
         --lr_scheduler constant \
         --use_8bit_adam \
         --dataloader_num_workers 4 \
