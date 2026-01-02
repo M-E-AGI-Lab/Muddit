@@ -1,4 +1,5 @@
 import sys
+import os
 import argparse
 sys.path.append("./")
 
@@ -19,7 +20,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run Meissonic inference.")
     parser.add_argument("--model_path", type=str, default="MeissonFlow/Meissonic")
     parser.add_argument("--transformer_path", type=str, default="MeissonFlow/Meissonic")
-    parser.add_argument("--image_path_or_dir", type=str, default="./output")
+    parser.add_argument("--image_path", type=str, default="")
+    parser.add_argument("--question", type=str, default="What is the man doing in this image?")
     parser.add_argument("--resolution", type=int, default=512)
     parser.add_argument("--steps", type=int, default=32)
     parser.add_argument("--cfg", type=float, default=9.0)
@@ -49,13 +51,11 @@ def main():
     pipe.to(args.device)
 
     try:
-        images = load_images_to_tensor(args.image_path_or_dir, target_size=(args.resolution, args.resolution))
+        images = load_images_to_tensor(args.image_path, target_size=(args.resolution, args.resolution))
     except:
-        images = None
+        raise ValueError("Failed to load images")
 
-    questions = [
-        "Please describe this image.",
-    ] * len(images)
+    questions = args.question
 
     output = pipe(
         prompt=questions,

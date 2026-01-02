@@ -713,26 +713,26 @@ class Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginal
     ):
         super().__init__()
         self.out_channels = in_channels
-        self.inner_dim = self.num_attention_heads * self.attention_head_dim 
+        self.inner_dim = self.config.num_attention_heads * self.config.attention_head_dim 
 
         self.pos_embed = FluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
         text_time_guidance_cls = (
             CombinedTimestepGuidanceTextProjEmbeddings if guidance_embeds else CombinedTimestepTextProjEmbeddings
         )
         self.time_text_embed = text_time_guidance_cls(
-            embedding_dim=self.inner_dim, pooled_projection_dim=self.pooled_projection_dim
+            embedding_dim=self.inner_dim, pooled_projection_dim=self.config.pooled_projection_dim
         )
 
-        self.context_embedder = nn.Linear(self.joint_attention_dim, self.inner_dim)
+        self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.inner_dim)
      
         self.transformer_blocks = nn.ModuleList(
             [
                 TransformerBlock(
                     dim=self.inner_dim,
-                    num_attention_heads=self.num_attention_heads,
-                    attention_head_dim=self.attention_head_dim,
+                    num_attention_heads=self.config.num_attention_heads,
+                    attention_head_dim=self.config.attention_head_dim,
                 )
-                for i in range(self.num_layers)
+                for i in range(self.config.num_layers)
             ]
         )
 
@@ -740,10 +740,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginal
             [
                 SingleTransformerBlock(
                     dim=self.inner_dim,
-                    num_attention_heads=self.num_attention_heads,
-                    attention_head_dim=self.attention_head_dim,
+                    num_attention_heads=self.config.num_attention_heads,
+                    attention_head_dim=self.config.attention_head_dim,
                 )
-                for i in range(self.num_single_layers)
+                for i in range(self.config.num_single_layers)
             ]
         )
 
@@ -756,13 +756,13 @@ class Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginal
         use_bias = False
         micro_cond_embed_dim = 1280
         self.embed = UVit2DConvEmbed(
-            in_channels_embed, self.inner_dim, self.vocab_size, ln_elementwise_affine, layer_norm_eps, use_bias
+            in_channels_embed, self.inner_dim, self.config.vocab_size, ln_elementwise_affine, layer_norm_eps, use_bias
         )
         self.mlm_layer = ConvMlmLayer(
-            self.inner_dim, in_channels_embed, use_bias, ln_elementwise_affine, layer_norm_eps, self.codebook_size
+            self.inner_dim, in_channels_embed, use_bias, ln_elementwise_affine, layer_norm_eps, self.config.codebook_size
         )
         self.cond_embed = TimestepEmbedding( 
-            micro_cond_embed_dim + self.pooled_projection_dim, self.inner_dim, sample_proj_bias=use_bias
+            micro_cond_embed_dim + self.config.pooled_projection_dim, self.inner_dim, sample_proj_bias=use_bias
         )
         self.encoder_proj_layer_norm = RMSNorm(self.inner_dim, layer_norm_eps, ln_elementwise_affine)
         self.project_to_hidden_norm = RMSNorm(in_channels_embed, layer_norm_eps, ln_elementwise_affine)
@@ -934,7 +934,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginal
             If `return_dict` is True, an [`~models.transformer_2d.Transformer2DModelOutput`] is returned, otherwise a
             `tuple` where the first element is the sample tensor.
         """
-        micro_cond_encode_dim = 256 # same as self.micro_cond_encode_dim = 256 from amused
+        micro_cond_encode_dim = 256
         micro_cond_embeds = get_timestep_embedding(
             micro_conds.flatten(), micro_cond_encode_dim, flip_sin_to_cos=True, downscale_freq_shift=0
         ) 
@@ -1144,7 +1144,7 @@ class SymmetricTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
     ):
         super().__init__()
         self.out_channels = in_channels
-        self.inner_dim = self.num_attention_heads * self.attention_head_dim 
+        self.inner_dim = self.config.num_attention_heads * self.config.attention_head_dim 
 
         self.pos_embed = FluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
         text_time_guidance_cls = (
@@ -1157,21 +1157,21 @@ class SymmetricTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
         if t5_dim is not None:
             self.adapter = nn.Sequential(
                 nn.LayerNorm(t5_dim, elementwise_affine=False, eps=1e-6),
-                nn.Linear(t5_dim, self.joint_attention_dim, bias=False)
+                nn.Linear(t5_dim, self.config.joint_attention_dim, bias=False)
             )
         else:
             self.adapter = None
 
-        self.context_embedder = nn.Linear(self.joint_attention_dim, self.inner_dim)
+        self.context_embedder = nn.Linear(self.config.joint_attention_dim, self.inner_dim)
      
         self.transformer_blocks = nn.ModuleList(
             [
                 TransformerBlock(
                     dim=self.inner_dim,
-                    num_attention_heads=self.num_attention_heads,
-                    attention_head_dim=self.attention_head_dim,
+                    num_attention_heads=self.config.num_attention_heads,
+                    attention_head_dim=self.config.attention_head_dim,
                 )
-                for i in range(self.num_layers)
+                for i in range(self.config.num_layers)
             ]
         )
 
@@ -1179,10 +1179,10 @@ class SymmetricTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
             [
                 SingleTransformerBlock(
                     dim=self.inner_dim,
-                    num_attention_heads=self.num_attention_heads,
-                    attention_head_dim=self.attention_head_dim,
+                    num_attention_heads=self.config.num_attention_heads,
+                    attention_head_dim=self.config.attention_head_dim,
                 )
-                for i in range(self.num_single_layers)
+                for i in range(self.config.num_single_layers)
             ]
         )
 
@@ -1194,13 +1194,13 @@ class SymmetricTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
         use_bias = False
         micro_cond_embed_dim = 1280
         self.embed = UVit2DConvEmbed(
-            in_channels_embed, self.inner_dim, self.vocab_size, ln_elementwise_affine, layer_norm_eps, use_bias
+            in_channels_embed, self.inner_dim, self.config.vocab_size, ln_elementwise_affine, layer_norm_eps, use_bias
         )
         self.mlm_layer = ConvMlmLayer(
-            self.inner_dim, in_channels_embed, use_bias, ln_elementwise_affine, layer_norm_eps, self.codebook_size
+            self.inner_dim, in_channels_embed, use_bias, ln_elementwise_affine, layer_norm_eps, self.config.codebook_size
         )
         self.cond_embed = TimestepEmbedding( 
-            micro_cond_embed_dim + self.pooled_projection_dim, self.inner_dim, sample_proj_bias=use_bias
+            micro_cond_embed_dim + self.config.pooled_projection_dim, self.inner_dim, sample_proj_bias=use_bias
         )
         self.encoder_proj_layer_norm = RMSNorm(self.inner_dim, layer_norm_eps, ln_elementwise_affine)
         self.project_to_hidden_norm = RMSNorm(in_channels_embed, layer_norm_eps, ln_elementwise_affine)
@@ -1275,7 +1275,7 @@ class SymmetricTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, Fro
             If `return_dict` is True, an [`~models.transformer_2d.Transformer2DModelOutput`] is returned, otherwise a
             `tuple` where the first element is the sample tensor.
         """
-        micro_cond_encode_dim = 256 # same as self.micro_cond_encode_dim = 256 from amused
+        micro_cond_encode_dim = 256
         micro_cond_embeds = get_timestep_embedding(
             micro_conds.flatten(), micro_cond_encode_dim, flip_sin_to_cos=True, downscale_freq_shift=0
         ) 

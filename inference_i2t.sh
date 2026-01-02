@@ -3,8 +3,9 @@
 python inference_i2t.py \
   --model_path "MeissonFlow/Meissonic" \
   --transformer_path "path/to/transformer" \
-  --image_path_or_dir "assets/demo.jpg" \
-  --resolution 512 \
+  --image_path "assets/COCO_val2014_000000000395.jpg" \
+  --question "What is the man doing in the image?" \
+  --resolution 1024 \
   --steps 32 \
-  --cfg 9.0 \
+  --cfg 1.0 \
   --device "cuda"

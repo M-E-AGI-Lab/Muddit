@@ -25,6 +25,7 @@ import pyarrow.parquet as pq
 import random
 import bisect
 import pyarrow.fs as fs
+import pandas as pd
 
 
 @torch.no_grad()
@@ -150,7 +151,7 @@ class ImageCaptionLargeDataset(Dataset):
         self.norm = norm
         
         self.data_list = []        
-        for root, dirnames, filenames in os.walk(root_dir):
+        for root, _, filenames in os.walk(root_dir):
             for filename in filenames:
                 if filename.endswith(".jpg") or filename.endswith(".png"):
                     base_name = os.path.splitext(filename)[0]
@@ -206,13 +207,16 @@ class MultiSourceVLDataset(Dataset):
         norm: bool = False,
         # ----- paths -----
         llava_json: str = None, llava_img_root: str = None,
-        mmmu_json: str = None,  mmmu_img_root: str = None,
-        vqa_ann_json: str = None, vqa_img_root: str = None,
+        allava_json: str = None, allava_img_root: str = None,
+        vqav2_json: str = None, vqav2_img_root: str = None,
         gqa_json: str = None, gqa_img_root: str = None,
-        coco_json: str = None, coco_img_root: str = None,
-        coco_qa_json: str = None,
-        mg_llava_json: str = None, mg_llava_root: str = None,
-        pdd3_dir: str = None, caption_dir: str = None,
+        cider_root: str = None,
+        vqav2_root: str = None,
+        mme_root: str = None,
+        mmb_root: str = None,
+        mmmu_root: str = None,
+        img_root: str = None, caption_dir: str = None,
+        geneval_root: str = None,
     ):
         self.tokenizer = tokenizer
         self.size = size
@@ -223,65 +227,41 @@ class MultiSourceVLDataset(Dataset):
         self.mmu_samples = []      # [(img_path, question, answer), ...]
 
         if llava_json:
-            self._load_llava(llava_json, llava_img_root)
-        if mmmu_json:
-            self._load_mmmu(mmmu_json, mmmu_img_root)
-        if vqa_ann_json:
-            self._load_vqav2(vqa_ann_json, vqa_img_root)
-        if mg_llava_json:
-            self._load_mg_llava(mg_llava_json, mg_llava_root)
+            self._load_llava_data(llava_json, llava_img_root)
+        if allava_json:
+            self._load_instruction_tuning_data(allava_json, allava_img_root)
+        if vqav2_json:
+            self._load_instruction_tuning_data(vqav2_json, vqav2_img_root)
+        if vqav2_root:
+            self._load_vqav2_data(vqav2_root)
+        if cider_root:
+            self._load_cider_data(cider_root)
+        if gqa_json:
+            self._load_instruction_tuning_data(gqa_json, gqa_img_root)
+        if mmmu_root:
+            self._load_mm_data(mmmu_root)
+        if mmb_root:
+            self._load_mm_data(mmb_root)
+        if mme_root:
+            self._load_mme_data(mme_root)
         if caption_dir:
             self._load_caption(caption_dir)
-        if pdd3_dir:
-            self._load_pdd3(pdd3_dir)
+        if img_root:
+            self._load_image(img_root)
+        if geneval_root:
+            self._load_image(geneval_root)
 
         self.len_mmu = len(self.mmu_samples)
         self.len_gen = len(self.gen_samples)
+        
+        print(f"[INFO] Loaded {self.len_mmu} MMU samples and {self.len_gen} generation samples.")
 
     # ------------------------------------------------------------------ #
-    #                          dataset parsers                            #
+    #                          dataset parsers                           #
     # ------------------------------------------------------------------ #
-    def _load_llava(self, json_path, img_root):
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            
-        for ex in data:
-            img_file = os.path.join(img_root, ex["image"])
-
-            human_msg = next(m["value"] for m in ex["conversations"] if m["from"] == "human")
-            gpt_msg   = next(m["value"] for m in ex["conversations"] if m["from"] == "gpt")
-
-            self.mmu_samples.append((img_file, human_msg.strip(), gpt_msg.strip())) 
-
-    def _load_mmmu(self, json_path, img_root):
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            
-        for ex in data:
-            img_file = os.path.join(img_root, ex["image"])
-            choices  = "\n".join([f"{chr(65+i)}. {c}" for i, c in enumerate(ex["choices"])])
-            
-            question = f"{ex['question'].strip()}\n{choices}"
-            answer = f"{ex['answer']}"
-            
-            self.mmu_samples.append((img_file, question, answer))
-
-    def _load_vqav2(self, ann_json, img_root):
-        with open(ann_json, "r") as file:
-            annos = json.load(file)
-
-        for ann in annos:
-            q = ann["question"]
-            answer = ann["answer"]
-            img_path = ann["image"]
-            img_file = os.path.join(
-                img_root,
-                img_path   # if val, modify to val2014
-            )
-
-            self.mmu_samples.append((img_file, q, answer))
-
-    def _load_mg_llava(self, json_path, img_root):
+    def _load_llava_data(self, json_path, img_root):
+        before_len = len(self.mmu_samples)
+        
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             
@@ -289,34 +269,219 @@ class MultiSourceVLDataset(Dataset):
             image = ex.get("image", None)
             if image is not None:
                 img_file = os.path.join(img_root, ex["image"])
-                if os.path.exists(img_file):
-                    human_msg = next(m["value"] for m in ex["conversations"] if m["from"] == "human")
-                    gpt_msg   = next(m["value"] for m in ex["conversations"] if m["from"] == "gpt")
+                
+                human_msgs = [m["value"] for m in ex["conversations"] if m["from"] == "human"]
+                gpt_msgs = [m["value"] for m in ex["conversations"] if m["from"] == "gpt"]
+                
+                for human_msg, gpt_msg in zip(human_msgs, gpt_msgs):
+                    human_msg = human_msg.replace("<image>", "").strip()
+                    gpt_msg = gpt_msg.strip()
+                    self.mmu_samples.append((img_file, human_msg, gpt_msg)) 
 
-                    self.mmu_samples.append((img_file, human_msg.strip(), gpt_msg.strip())) 
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {json_path}.")
+
+
+    def _load_instruction_tuning_data(self, json_path, img_root):
+        if img_root is None:
+            img_root = os.path.dirname(json_path)
+        
+        before_len = len(self.mmu_samples)
+        
+        data = []
+        cnt = 0
+        with open(json_path, "r", encoding="utf-8") as f:
+            for line in f:
+                data.append(json.loads(line))
+
+        for ex in data:
+            image = ex.get("image", None)
+            if image is not None:
+                img_file = os.path.join(img_root, ex["image"])
+                
+                if os.path.exists(img_file):
+                    human_msgs = [m["value"] for m in ex["conversations"] if m["from"] == "human"]
+                    gpt_msgs = [m["value"] for m in ex["conversations"] if m["from"] == "gpt"]
+                    
+                    for human_msg, gpt_msg in zip(human_msgs, gpt_msgs):
+                        human_msg = human_msg.replace("<image>", "").strip()
+                        gpt_msg = gpt_msg.strip()
+                        self.mmu_samples.append((img_file, human_msg, gpt_msg))
+                        cnt += 1
+
+            if "gqa" in json_path:
+                if cnt > 300000:
+                    break
+
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {json_path}.")
+    
+
+    def _load_cider_data(self, root_dir):
+        before_len = len(self.mmu_samples)
+        json_filepath = os.path.join(root_dir, "captions_val2014.json")
+        image_root = os.path.join(root_dir, "val2014")
+        if os.path.exists(json_filepath):
+            with open(json_filepath, "r") as file:
+                data = json.load(file)
+
+            for item in data["annotations"]:
+                # image_id is 395, then the image path is image_root/COCO_val2014_000000000395.jpg
+                img_path = os.path.join(image_root, f"COCO_val2014_{item['image_id']:012d}.jpg")
+                if os.path.exists(img_path):
+                    question = "Please describe this image concisely."
+                    caption = item["caption"]
+                    self.mmu_samples.append((img_path, question, caption))
+
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {root_dir}.")
+
+
+    def _load_vqav2_data(self, root_dir):
+        before_len = len(self.mmu_samples)
+
+        json_filepath = os.path.join(root_dir, "validation_annotations.json")
+        if os.path.exists(json_filepath):
+            with open(json_filepath, "r") as file:
+                data = json.load(file)
+            for item in data:
+                img_path = os.path.join(root_dir, item["image"])
+                if os.path.exists(img_path):
+                    question = item["question"]
+                    answer = item["answer"][0]["answer"]
+                    self.mmu_samples.append((img_path, question, answer))
+
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {root_dir}.")
+
+
+    def _load_mme_data(self, root_dir):
+        before_len = len(self.mmu_samples)
+        for root, _, files in os.walk(root_dir):
+            for f in files:
+                if f.lower().endswith((".jpg", ".png")):
+                    try:
+                        base = os.path.splitext(f)[0]
+                        txt_path = os.path.join(root, base + ".txt")
+                        txt_path = txt_path.replace("images", "questions_answers_YN")
+                        if os.path.exists(txt_path):
+                            with open(txt_path, "r") as file:
+                                caption = file.read().strip()
+                            case1, case2 = caption.split("\n")
+                            
+                            q1, a1 = case1.split(" Please answer yes or no.")
+                            q1 = q1.strip() + " Please answer yes or no."
+                            a1 = a1.strip()
+                            q2, a2 = case2.split(" Please answer yes or no.")
+                            q2 = q2.strip() + " Please answer yes or no."
+                            a2 = a2.strip()
+                            self.mmu_samples.append((os.path.join(root, f), q1, a1))
+                            self.mmu_samples.append((os.path.join(root, f), q2, a2))
+                            
+                    except Exception as e:
+                        print(f"[Warning] Error at {os.path.join(root, f)}: {e}")
+                        continue
+
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {root_dir}.")
+
 
     def _load_caption(self, root_dir):
-        for root, _, files in os.walk(root_dir):
-            for f in files:
-                if f.lower().endswith((".jpg", ".png")):
-                    base = os.path.splitext(f)[0]
-                    txt_path = os.path.join(root, base + ".txt")
-                    if os.path.exists(txt_path):
-                        with open(txt_path, "r") as file:
-                            caption = file.read().strip()
-                        q = "Please describe this image."
-                        self.mmu_samples.append((os.path.join(root, f), q, caption))
+        before_len = len(self.mmu_samples)
+        
+        jsonl_file = os.path.join(root_dir, "images.jsonl")
+        if os.path.exists(jsonl_file):
+            with open(jsonl_file, "r") as file:
+                for line in file:
+                    item = json.loads(line)
+                    img_path = os.path.join(root_dir, item["image"])
+                    if os.path.exists(img_path):
+                        q = "Please describe this image in detail."
+                        caption = item["caption"]
+                        self.mmu_samples.append((img_path, q, caption))
+                        
+        else:
+            for root, _, files in os.walk(root_dir):
+                for f in files:
+                    if f.lower().endswith((".jpg", ".png")):
+                        base = os.path.splitext(f)[0]
+                        txt_path = os.path.join(root, base + ".txt")
+                        if os.path.exists(txt_path):
+                            with open(txt_path, "r") as file:
+                                caption = file.read().strip()
+                            q = "Please describe this image in detail."
+                            self.mmu_samples.append((os.path.join(root, f), q, caption))
 
-    def _load_pdd3(self, root_dir):
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {root_dir}.")
+        
+
+    def _load_image(self, root_dir):
+        before_len = len(self.gen_samples)
+        
+        jsonl_file = os.path.join(root_dir, "images.jsonl")
+        if os.path.exists(jsonl_file):
+            with open(jsonl_file, "r") as file:
+                for line in file:
+                    item = json.loads(line)
+                    img_path = os.path.join(root_dir, item["image"])
+                    caption = item["caption"]
+                    self.gen_samples.append((img_path, caption))
+                        
+        else:
+            for root, _, files in os.walk(root_dir):
+                for f in files:
+                    if f.lower().endswith((".jpg", ".png")):
+                        base = os.path.splitext(f)[0]
+                        txt_path = os.path.join(root, base + ".txt")
+                        if os.path.exists(txt_path):
+                            with open(txt_path, "r") as file:
+                                caption = file.read().strip()
+                            self.gen_samples.append((os.path.join(root, f), caption))
+
+        after_len = len(self.gen_samples)
+        print(f"[INFO] Loaded {after_len - before_len} from {root_dir}.")
+
+
+    def _load_mm_data(self, root_dir):
+        """
+        Data example:
+        
+        Question: Identify the question that Madelyn and Tucker's experiment can best answer.
+
+        A. Does Madelyn's snowboard slide down a hill in less time when it has a thin layer of wax or a thick layer of wax?
+        B. Does Madelyn's snowboard slide down a hill in less time when it has a layer of wax or when it does not have a layer of wax?
+
+        Answer: B
+        
+        Args:
+            root_dir (str): Path to the MMBench directory containing parquet files
+        """
+        before_len = len(self.mmu_samples)
+        if not os.path.exists(root_dir):
+            print(f"[Warning] MMBench directory not found: {root_dir}")
+            return
+        
         for root, _, files in os.walk(root_dir):
             for f in files:
                 if f.lower().endswith((".jpg", ".png")):
-                    base = os.path.splitext(f)[0]
-                    txt_path = os.path.join(root, base + ".txt")
-                    if os.path.exists(txt_path):
-                        with open(txt_path, "r") as file:
-                            caption = file.read().strip()
-                        self.gen_samples.append((os.path.join(root, f), caption))
+                    try:
+                        base = os.path.splitext(f)[0]
+                        txt_path = os.path.join(root, base + ".txt")
+                        if os.path.exists(txt_path):
+                            with open(txt_path, "r") as file:
+                                caption = file.read().strip()
+
+                            question = caption.split("Answer: ")[0].replace("Question: ", "").replace("\n", "").strip()
+                            answer = caption.split("Answer: ")[1].strip()
+                            
+                            self.mmu_samples.append((os.path.join(root, f), question, answer))
+                    except Exception as e:
+                        print(f"[Warning] Error at {os.path.join(root, f)}: {e}")
+                        continue
+
+        after_len = len(self.mmu_samples)
+        print(f"[INFO] Loaded {after_len - before_len} samples from {root_dir}.")
 
     # ------------------------------------------------------------------ #
     #                       PyTorch Dataset API                          #

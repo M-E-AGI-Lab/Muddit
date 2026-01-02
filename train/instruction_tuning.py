@@ -127,14 +127,14 @@ def parse_args():
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
-        "--mmmu_json_path",
+        "--allava_json_path",
         type=str,
         default=None,
         required=False,
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
-        "--mmmu_image_root",
+        "--allava_image_root",
         type=str,
         default=None,
         required=False,
@@ -155,21 +155,14 @@ def parse_args():
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
-        "--coco_json",
+        "--vqav2_root",
         type=str,
         default=None,
         required=False,
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
-        "--coco_qa_json",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--coco_img_root",
+        "--cider_root",
         type=str,
         default=None,
         required=False,
@@ -198,6 +191,34 @@ def parse_args():
     )
     parser.add_argument(
         "--mg_llava_root",
+        type=str,
+        default=None,
+        required=False,
+        help="A folder containing the training data of instance images.",
+    )
+    parser.add_argument(
+        "--mme_root",
+        type=str,
+        default=None,
+        required=False,
+        help="A folder containing the training data of instance images.",
+    )
+    parser.add_argument(
+        "--mmmu_root",
+        type=str,
+        default=None,
+        required=False,
+        help="A folder containing the training data of instance images.",
+    )
+    parser.add_argument(
+        "--mmb_root",
+        type=str,
+        default=None,
+        required=False,
+        help="A folder containing the training data of instance images.",
+    )
+    parser.add_argument(
+        "--geneval_root",
         type=str,
         default=None,
         required=False,
@@ -434,6 +455,18 @@ def _prepare_latent_image_ids(batch_size, height, width, device, dtype):
 
     return latent_image_ids.to(device=device, dtype=dtype)
 
+def safe_unwrap_model(model, accelerator=None):
+    if accelerator is not None:
+        try:
+            return accelerator.unwrap_model(model)
+        except KeyError:
+            pass
+
+    for attr in ["module", "model", "_fsdp_wrapped_module", "_orig_mod"]:
+        if hasattr(model, attr):
+            return getattr(model, attr)
+    return model
+
 def main(args):
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -445,7 +478,7 @@ def main(args):
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
-        log_with=args.report_to,
+        log_with=None,
         project_config=accelerator_project_config,
     )
 
@@ -460,8 +493,8 @@ def main(args):
     )
     logger.info(accelerator.state, main_process_only=False)
 
-    if accelerator.is_main_process:
-        accelerator.init_trackers("meissonic", config=vars(copy.deepcopy(args)))
+    # if accelerator.is_main_process:
+    #     accelerator.init_trackers("meissonic", config=vars(copy.deepcopy(args)))
 
     if args.seed is not None:
         set_seed(args.seed)
@@ -527,6 +560,10 @@ def main(args):
             nn.Linear(model.inner_dim, model.config.tokenizer_vocab_size, bias=False)
         )
 
+    # Store the dtype and config before compiling
+    model_dtype = model.dtype
+    model_config = model.config
+    
     model = torch.compile(model)
 
     if args.use_lora:
@@ -558,12 +595,12 @@ def main(args):
             text_encoder_lora_layers_to_save = None
 
             for model_ in models:
-                if isinstance(model_, type(accelerator.unwrap_model(model))):
+                if isinstance(model_, type(safe_unwrap_model(model, accelerator))):
                     if args.use_lora:
                         transformer_lora_layers_to_save = get_peft_model_state_dict(model_)
                     else:
                         model_.save_pretrained(os.path.join(output_dir, "transformer"))
-                elif isinstance(model_, type(accelerator.unwrap_model(text_encoder))):
+                elif isinstance(model_, type(safe_unwrap_model(text_encoder, accelerator))):
                     if args.text_encoder_use_lora:
                         text_encoder_lora_layers_to_save = get_peft_model_state_dict(model_)
                     else:
@@ -596,14 +633,14 @@ def main(args):
         while len(models) > 0:
             model_ = models.pop()
 
-            if isinstance(model_, type(accelerator.unwrap_model(model))):
+            if isinstance(model_, type(safe_unwrap_model(model, accelerator))):
                 if args.use_lora:
                     transformer = model_
                 else:
                     load_model = SymmetricTransformer2DModel.from_pretrained(os.path.join(input_dir, "transformer"), low_cpu_mem_usage=False, device_map=None)
                     model_.load_state_dict(adap_compile(load_model.state_dict()))
                     del load_model
-            elif isinstance(model_, type(accelerator.unwrap_model(text_encoder))):
+            elif isinstance(model_, type(safe_unwrap_model(text_encoder, accelerator))):
                 if args.text_encoder_use_lora:
                     text_encoder_ = model_
                 else:
@@ -686,19 +723,20 @@ def main(args):
             norm=False,
             llava_json=args.llava_json_path,
             llava_img_root=args.llava_image_root,
-            mmmu_json=args.mmmu_json_path,
-            mmmu_img_root=args.mmmu_image_root,
-            vqa_ann_json=args.vqa_ann_json_path,
-            vqa_img_root=args.vqa_image_root,
-            coco_json=args.coco_json,
-            coco_qa_json=args.coco_qa_json,
-            coco_img_root=args.coco_img_root,
+            allava_json=args.allava_json_path,
+            allava_img_root=args.allava_image_root,
+            vqav2_json=args.vqa_ann_json_path,
+            vqav2_img_root=args.vqa_image_root,
+            vqav2_root=args.vqav2_root,
+            cider_root=args.cider_root,
             gqa_json=args.gqa_json_root,
             gqa_img_root=args.gqa_image_root,
-            mg_llava_json=args.mg_llava_json,
-            mg_llava_root=args.mg_llava_root,
+            img_root=args.instance_data_dir,
+            geneval_root=args.geneval_root,
             caption_dir=args.caption_dir,
-            pdd3_dir=args.instance_data_dir,
+            mme_root=args.mme_root,
+            mmb_root=args.mmb_root,
+            mmmu_root=args.mmmu_root,
         )
     elif args.dataset_type == "DATA_TYPE":
         raise NotImplementedError("DATA_TYPE is not yet supported")
@@ -898,8 +936,8 @@ def main(args):
                         gen_input_ids, 
                         args.text_encoder_architecture
                     )
-                gen_encoder_hidden_states = gen_encoder_hidden_states.to(accelerator.device, dtype=accelerator.unwrap_model(model).dtype)
-                gen_cond_embeds = gen_cond_embeds.to(accelerator.device, dtype=accelerator.unwrap_model(model).dtype)
+                gen_encoder_hidden_states = gen_encoder_hidden_states.to(accelerator.device, dtype=model_dtype)
+                gen_cond_embeds = gen_cond_embeds.to(accelerator.device, dtype=model_dtype)
                 # ====================== encode clean text prompts ======================
 
 
@@ -914,7 +952,7 @@ def main(args):
                 batch_randperm = torch.rand(half_batch_size, seq_len, device=gen_image_tokens.device).argsort(dim=-1)
                 mask = batch_randperm < num_token_masked.unsqueeze(-1)
 
-                mask_id = accelerator.unwrap_model(model).config.vocab_size - 1
+                mask_id = model_config.vocab_size - 1
                 gen_image_ids = torch.where(mask, mask_id, gen_image_tokens)
                 image_labels = torch.where(mask, gen_image_tokens, -100)
                 # ====================== image perturbation ======================
@@ -1017,8 +1055,8 @@ def main(args):
                         mmu_input_ids_clip, 
                         args.text_encoder_architecture
                     )
-                mmu_encoder_hidden_states = mmu_encoder_hidden_states.to(accelerator.device, dtype=accelerator.unwrap_model(model).dtype)
-                mmu_cond_embeds = mmu_cond_embeds.to(accelerator.device, dtype=accelerator.unwrap_model(model).dtype)
+                mmu_encoder_hidden_states = mmu_encoder_hidden_states.to(accelerator.device, dtype=model_dtype)
+                mmu_cond_embeds = mmu_cond_embeds.to(accelerator.device, dtype=model_dtype)
                 # ====================== encode masked text prompts ======================
                 
                 
@@ -1049,24 +1087,14 @@ def main(args):
 
             # Train Step
             with accelerator.accumulate(model):
-                codebook_size = accelerator.unwrap_model(model).config.codebook_size                   
-                if args.resolution == 1024: # only stage 3 and stage 4 do not apply 2*
-                    img_ids = _prepare_latent_image_ids(
-                        gen_image_ids.shape[0], 
-                        gen_image_ids.shape[-2],
-                        gen_image_ids.shape[-1],
-                        gen_image_ids.device,
-                        gen_image_ids.dtype
-                    )
-                else:
-                    img_ids = _prepare_latent_image_ids(
-                        gen_image_ids.shape[0],
-                        gen_image_ids.shape[-2],
-                        gen_image_ids.shape[-1],
-                        gen_image_ids.device,
-                        gen_image_ids.dtype
-                    )
-
+                codebook_size = model_config.codebook_size                   
+                img_ids = _prepare_latent_image_ids(
+                    gen_image_ids.shape[0],
+                    gen_image_ids.shape[-2],
+                    gen_image_ids.shape[-1],
+                    gen_image_ids.device,
+                    gen_image_ids.dtype
+                )
                 txt_ids = torch.zeros(gen_encoder_hidden_states.shape[1], 3).to(device=gen_image_ids.device, dtype=gen_image_ids.dtype)
                 
                 image_logits = model(
@@ -1101,7 +1129,7 @@ def main(args):
                     txt_ids=txt_ids,
                     timestep=text_timestep * 1000,
                 )[1]
-                text_logits = text_logits.reshape(-1, accelerator.unwrap_model(model).config.tokenizer_vocab_size)
+                text_logits = text_logits.reshape(-1, model_config.tokenizer_vocab_size)
 
                 text_loss = F.cross_entropy(
                     text_logits,
@@ -1120,11 +1148,6 @@ def main(args):
                 avg_masking_rate = accelerator.gather(text_mask_prob.repeat(args.train_batch_size)).mean()
 
                 accelerator.backward(loss)
-                
-                # Temporarily add this to identify unused parameters
-                # for name, param in accelerator.unwrap_model(model).named_parameters():
-                #     if param.grad is None:
-                #         print(f"Unused parameter: {name}")
 
                 if args.max_grad_norm is not None and accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -1153,7 +1176,7 @@ def main(args):
                 if (global_step + 1) % args.checkpointing_steps == 0:
                     save_checkpoint(args, accelerator, global_step + 1, logger)
 
-                if (global_step + 1) % args.validation_steps == 0 and accelerator.is_main_process:
+                if (global_step) % args.validation_steps == 0 and accelerator.is_main_process:
 
                     with torch.no_grad():
                         logger.info("Generating images...")
@@ -1168,7 +1191,7 @@ def main(args):
                         )
                         
                         pipe = UnifiedPipeline(
-                            transformer=accelerator.unwrap_model(model),
+                            transformer=safe_unwrap_model(model, accelerator),
                             tokenizer=tokenizer,
                             text_encoder=text_encoder,
                             vqvae=vq_model,
@@ -1195,22 +1218,13 @@ def main(args):
                             result = torch.cat(result,dim=0)
                             result = make_grid(result, nrow=3)
                             save_image(result,os.path.join(args.output_dir, str(global_step)+'_text2image_1024_CFG-9.png'))
-                        
-                            output_data = {
-                                "step": global_step,
-                                "prompts": args.validation_prompts,
-                                "images": [f"{global_step}_text2image_1024_CFG-9_{i}.png" for i in range(len(pil_images))]
-                            }
-
-                            with open(os.path.join(args.output_dir, f"text2image_{global_step}.json"), "w") as f:
-                                json.dump(output_data, f, indent=2)
 
                         image = load_images_to_tensor(args.validation_images, target_size=(args.resolution, args.resolution))        
                         output = pipe(
                             prompt=args.validation_vqa_prompts,
                             height=args.resolution, 
                             width=args.resolution, 
-                            guidance_scale=9,
+                            guidance_scale=1.0,
                             image=image,
                             num_inference_steps=64
                         )
@@ -1240,7 +1254,7 @@ def main(args):
 
     # Save the final trained checkpoint
     if accelerator.is_main_process:
-        model = accelerator.unwrap_model(model)
+        model = safe_unwrap_model(model, accelerator)
         model.save_pretrained(args.output_dir)
 
     accelerator.end_training()
