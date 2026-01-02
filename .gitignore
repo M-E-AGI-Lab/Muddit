@@ -1,0 +1,7 @@
+data
+work_dirs
+eval
+Meissonic
+
+*.pyc
+__pycache__
