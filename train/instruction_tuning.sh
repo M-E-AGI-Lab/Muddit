@@ -23,31 +23,17 @@ PYTHONPATH="${PYTHONPATH:-./}" accelerate launch \
   --main_process_port "${MASTER_PORT}" \
   --num_processes "${WORLD_SIZE}" \
   train/instruction_tuning.py \
-  --output_dir "work_dirs/instruction_tuning_vqav2_cider_geneval" \
+  --output_dir "path/to/output" \
   --train_batch_size 4 \
   --gradient_accumulation_steps 8 \
   --learning_rate 1e-4 \
   --text_loss_weight 0.3 \
   --max_grad_norm 10 \
-  --pretrained_model_name_or_path "./Meissonic" \
-  --pretrained_transformer_path "work_dirs/pretrained_models/checkpoint-100000" \
-  --resume_from_checkpoint "/afs/chatrl/users/sqy/projects/Muddit/work_dirs/instruction_tuning/checkpoint-6000" \
+  --pretrained_model_name_or_path "MeissonFlow/Meissonic" \
+  --pretrained_transformer_path "path/to/transformer" \
   --text_encoder_architecture 'open_clip' \
   --dataset_type 'MultiSourceVLDataset' \
-  --instance_data_dir './data/journeydb' \
-  --geneval_root './data/geneval' \
-  --llava_json_path './data/instruction_tuning/llava/llava_instruct_150k.json' \
-  --llava_image_root './data/instruction_tuning/coco/train2017' \
-  --vqa_ann_json_path './data/instruction_tuning/coco/vqav2_en.jsonl' \
-  --vqa_image_root './data/instruction_tuning/coco' \
-  --vqav2_root './data/vqav2' \
-  --cider_root './data/instruction_tuning/ms-coco-CIDEr' \
-  --gqa_json_root './data/instruction_tuning/gqa/gqa_en.jsonl' \
-  --gqa_image_root './data/instruction_tuning/gqa' \
-  --caption_dir './data/instruction_tuning/HQIT/archives' \
-  --mme_root './data/instruction_tuning/mme/data' \
-  --mmmu_root './data/instruction_tuning/mmmu/data' \
-  --mmb_root './data/instruction_tuning/mmbench/data' \
+  --instance_data_dir 'path/to/data' \
   --resolution 1024 \
   --mixed_precision bf16 \
   --use_8bit_adam \
@@ -63,7 +49,7 @@ PYTHONPATH="${PYTHONPATH:-./}" accelerate launch \
       'A cozy, rustic log cabin nestled in a snow-covered forest, with smoke rising from the stone chimney, warm lights glowing from the windows, and a path of footprints leading to the front door.' \
       'A Cute Cat' \
       'A Snow Mountain' \
-  --validation_images 'work_dirs/validation_images' \
+  --validation_images 'path/to/validation_images' \
   --validation_vqa_prompts 'Please describe this image in detail.' \
   --max_train_steps 100000 \
   --checkpointing_steps 500 \

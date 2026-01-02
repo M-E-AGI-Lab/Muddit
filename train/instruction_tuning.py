@@ -155,76 +155,6 @@ def parse_args():
         help="A folder containing the training data of instance images.",
     )
     parser.add_argument(
-        "--vqav2_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--cider_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--gqa_json_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--gqa_image_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--mg_llava_json",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--mg_llava_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--mme_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--mmmu_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--mmb_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
-        "--geneval_root",
-        type=str,
-        default=None,
-        required=False,
-        help="A folder containing the training data of instance images.",
-    )
-    parser.add_argument(
         "--training_from_scratch",
         type=bool,
         default=False,
@@ -727,16 +657,8 @@ def main(args):
             allava_img_root=args.allava_image_root,
             vqav2_json=args.vqa_ann_json_path,
             vqav2_img_root=args.vqa_image_root,
-            vqav2_root=args.vqav2_root,
-            cider_root=args.cider_root,
-            gqa_json=args.gqa_json_root,
-            gqa_img_root=args.gqa_image_root,
             img_root=args.instance_data_dir,
-            geneval_root=args.geneval_root,
             caption_dir=args.caption_dir,
-            mme_root=args.mme_root,
-            mmb_root=args.mmb_root,
-            mmmu_root=args.mmmu_root,
         )
     elif args.dataset_type == "DATA_TYPE":
         raise NotImplementedError("DATA_TYPE is not yet supported")
